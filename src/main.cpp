@@ -1,128 +1,93 @@
 #include <Arduino.h>
-#include <ADXL.h>
-#include <EEPROM.h>
-#include <MCP.h>
+#include <ADXL.hpp>
+#include <EEPROM.hpp>
 #include <Wire.h>
+#include <OLED.hpp>
+#include <RTC.hpp>
+#include <math.h>
 
-EEPROM eeprom;
-ADXL acceler;
-MCP rtclock;
+static boolean justBooted = true;
+static boolean brownOut = false;
+
+  uint8_t EF_Global;
+//------------------------
+const uint8_t EF_ADXL = 0x01;
+const uint8_t EF_EEPROM = 0x02;
+const uint8_t EF_RTC = 0x03;
+const uint8_t EF_OLED = 0x04;
+const uint8_t EF_I2C = 0x05;
+
+  //uint8_t* TF_Global(5);
+//------------------------
+//First TF index
+const uint8_t TF_ADXL_WATERMARK = 0x01;
+const uint8_t TF_ADXL_DOUBLETAP = 0x02;
+const uint8_t TF_ADXL_INACTIVITY = 0x03;
+//Second TF index
+const uint8_t TF_RTC_15MIN = 0x01;
 
 void setupI2C(){
   Wire.begin(); //join i2c bus
   Wire.setClock(100000);
 }
 
-void setupSPI(){
-  
-}
 
 void setup() {
      /*
    * Configure all buses
    */
   setupI2C();
-  //setupSPI();
-
   /**
   * Initialize the EEPROM
   */
-  eeprom.setupEEPROM();
-
+  EEPROM::getInstance()->setupEEPROM();
   /**
    * Configure the ADXL345
    */
-  acceler.setupADXL345();
+  ADXL::getInstance()->setupADXL345();
+  /**
+   * Configure the OLED
+   */
+  OLED::getInstance()->setUpOLED();
 
   /**
    * Initialize configuration data for the RTC. Modify
    * the contents of the initConfig object such that the
    * RTC will begin with the correct values
    */
-  DateTime initConfig;
-  rtclock.setupRTC(&initConfig);
+  rtcc_time initConfig;
+  //rtclock.setupRTC(&initConfig);
+  RTC::getInstance()->setupRTC(&initConfig);
 
   Serial.begin(9600);
 }
 
 Accel currentReading;
 DateTime currentDateTime;
+uint8_t totalSteps = 0;
+
+void printScreen(){
+  ADXL::getInstance()->readADXL(&currentReading);
+  RTC::getInstance()->readRTC(&currentDateTime);
+  OLED::getInstance()->getLib()->println(sqrt(sq(currentReading.x)+sq(currentReading.y)+sq(currentReading.z)));
+  OLED::getInstance()->getLib()->print(currentDateTime.month);
+  OLED::getInstance()->getLib()->print("/");
+  OLED::getInstance()->getLib()->print(currentDateTime.day);
+  OLED::getInstance()->getLib()->print("/");
+  OLED::getInstance()->getLib()->println(currentDateTime.year);
+  OLED::getInstance()->getLib()->println("<3");
+  OLED::getInstance()->getLib()->print(currentDateTime.hour);
+  OLED::getInstance()->getLib()->print(":");
+  OLED::getInstance()->getLib()->print(currentDateTime.minute);
+  OLED::getInstance()->getLib()->print(":");
+  OLED::getInstance()->getLib()->println(currentDateTime.second);
+  OLED::getInstance()->getLib()->println(ADXL::getInstance()->getLib()->isInactivityAc());
+  OLED::getInstance()->getLib()->display();
+  delay(100);
+  OLED::getInstance()->getLib()->clear(PAGE);
+  OLED::getInstance()->getLib()->setCursor(0,0);
+}
 
 void loop() {
-    /**
-   * Test #1: Try to read from the ADXL345 and
-   * print out the results
-   */
-  
-  /*
-  acceler.readADXL(&currentReading);
-
-  Serial.print(currentReading.x);
-  Serial.print("\t");
-  Serial.print(currentReading.y);
-  Serial.print("\t");
-  Serial.println(currentReading.z);
-  */
-
-  /**
-   * Test #2: Try to read out the time of day and
-   * print out the results
-   */
-
-  /*
-   rtclock.readRTC(&currentDateTime);
-   Serial.print(currentDateTime.month);
-   Serial.print("/");
-   Serial.print(currentDateTime.day);
-   Serial.print("/");
-   Serial.print(currentDateTime.year);
-   Serial.print("\t");
-   Serial.print(currentDateTime.hour);
-   Serial.print(":");
-   Serial.print(currentDateTime.minute);
-   Serial.print(":");
-   Serial.println(currentDateTime.second);
-  
-  */
-
-   /**
-    * Test #3: Try to write and read back some
-    * random data
-    */
-/*
-   
-    uint16_t array[5];
-    for(int i=0;i<5;i++)
-    {
-      array[i]=random();
-    }
-    eeprom.writeDataToEEPROM(array,5);
-
-    uint16_t buffer[5];
-
-	eeprom.readDataFromEEPROM(buffer,5);
-
-  for(int i = 0; i < 5; i ++){
-  Serial.println(long(array[i]));
-  Serial.println(long(buffer[i]));
-  }
-	
-	bool testPass = true;
-	for(int i=0;i<5;i++)
-	{
-		if(buffer[i]!=array[i])
-		{
-			testPass=false;
-		}
-	}
-	
-	if(testPass)
-	{
-		Serial.println("EEPROM Test Passed.");
-	}
-	else
-	{
-		Serial.println("EEPROM Test Failed.");
-	}
-*/
+    printScreen();
 }

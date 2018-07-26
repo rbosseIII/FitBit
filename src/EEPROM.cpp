@@ -1,6 +1,8 @@
-#include <EEPROM.h>
+#include <EEPROM.hpp>
 
 #define CONTROLCODE 0x50
+
+EEPROM* EEPROM::_pInstance = NULL;
 
 EEPROM::EEPROM(){
     //address id is 0x50 not 0xA0
@@ -8,11 +10,17 @@ EEPROM::EEPROM(){
     //no need for start and stop bits
 }
 
-EEPROM::~EEPROM(){
-}
 
 void EEPROM::setupEEPROM(){
     //don't need set up
+}
+
+EEPROM* EEPROM::getInstance(){
+    if(!_pInstance)
+    {
+        _pInstance = new EEPROM();
+    }
+    return _pInstance;
 }
 
 void EEPROM::writeDataToEEPROM(uint16_t* data, uint16_t size){

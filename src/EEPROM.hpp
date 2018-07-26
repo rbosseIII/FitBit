@@ -3,9 +3,12 @@
 
 class EEPROM{
     public:
-        EEPROM();
-        virtual ~EEPROM();
+        static EEPROM* getInstance();
         void setupEEPROM();
         void writeDataToEEPROM(uint16_t*,uint16_t);
         void readDataFromEEPROM(uint16_t*,uint16_t);
+
+    private:
+        EEPROM();
+        static EEPROM* _pInstance; 
 };
