@@ -4,7 +4,11 @@
 #include <Wire.h>
 #include <OLED.hpp>
 #include <RTC.hpp>
-#include <math.h>
+#include <avr/sleep.h>
+#include <avr/power.h>
+
+#define ADXLINT1 0
+#define ADXLINT2 1
 
 static boolean justBooted = true;
 static boolean brownOut = false;
@@ -17,7 +21,7 @@ const uint8_t EF_RTC = 0x03;
 const uint8_t EF_OLED = 0x04;
 const uint8_t EF_I2C = 0x05;
 
-  //uint8_t* TF_Global(5);
+uint8_t TF_Global[5];
 //------------------------
 //First TF index
 const uint8_t TF_ADXL_WATERMARK = 0x01;
@@ -26,13 +30,106 @@ const uint8_t TF_ADXL_INACTIVITY = 0x03;
 //Second TF index
 const uint8_t TF_RTC_15MIN = 0x01;
 
+RTC* rtc = RTC::getInstance();
+EEPROM* eeprom = EEPROM::getInstance();
+ADXL* adxl = ADXL::getInstance();
+OLED* oled = OLED::getInstance();
+
+
+void delayLoop()
+{
+  long startTime = millis();
+  const long totalDelay = 5000;
+
+  bool timeExpired = (millis() - startTime) > totalDelay;
+  while (!timeExpired)
+  {
+    digitalWrite(4, HIGH);
+    delay(100);
+    digitalWrite(4, LOW);
+    delay(100);
+
+    timeExpired = (millis() - startTime) > totalDelay;
+  }
+}
+
 void setupI2C(){
   Wire.begin(); //join i2c bus
-  Wire.setClock(100000);
+  Wire.setClock(400000);
+}
+
+void ADXL_ISR(){
+  EF_Global |= EF_ADXL;
+}
+
+void EEPROM_ISR(){
+  EF_Global |= EF_EEPROM;
+}
+
+void RTC_ISR(){
+
+  EF_Global |= EF_RTC;
+}
+
+void sleep(){
+    set_sleep_mode(SLEEP_MODE_PWR_SAVE);
+
+    //enable sleep mode by setting the sleep bit
+    sleep_enable();
+
+    //re-enable interrupts. If you do not, then you will never
+    //awake from sleep...
+    sei();
+
+    //execute the sleep instruction and actually go to sleep
+    sleep_cpu();
+
+    //WAKE UP! First thing to do is disable sleep so we
+    //don't do it again.
+    sleep_disable();
+}
+
+void perifDisable(){
+  power_all_enable();
+  //power_timer0_enable();
+  //power_usb_enable();
+  //power_twi_enable();
 }
 
 
 void setup() {
+
+  /**
+   * Create an interrupt for ADXL on Digital Pin 1 (DOUBLETAP)
+   */ 
+  pinMode(1,INPUT);
+  attachInterrupt(digitalPinToInterrupt(1), ADXL_ISR, RISING);
+
+  pinMode(7,INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(7), RTC_ISR, FALLING);
+  /**
+   * Create an interrupt for ADXL on Digital Pin 0 (Watermark and DATAREADY)
+   */
+  //pinMode(0,INPUT);
+  //attachInterrupt(digitalPinToInterrupt(0), ADXL_ISR, RISING);
+
+    /**
+   * Initialize configuration data for the RTC. Modify
+   * the contents of the initConfig object such that the
+   * RTC will begin with the correct values
+   */
+  rtc->setupRTC();
+
+  //CLKPR = _BV(CLKPCE);  // enable change of the clock prescaler
+  //CLKPR = _BV(CLKPS0);  // divide frequency by 2
+
+  perifDisable();
+
+  pinMode(4,OUTPUT);
+  /**
+   * Temp function to prevent bricking
+   */
+  delayLoop();
      /*
    * Configure all buses
    */
@@ -40,54 +137,80 @@ void setup() {
   /**
   * Initialize the EEPROM
   */
-  EEPROM::getInstance()->setupEEPROM();
+  eeprom->setupEEPROM();
   /**
    * Configure the ADXL345
    */
-  ADXL::getInstance()->setupADXL345();
+  adxl->setupADXL345();
   /**
    * Configure the OLED
    */
-  OLED::getInstance()->setUpOLED();
+  oled->setUpOLED();
 
-  /**
-   * Initialize configuration data for the RTC. Modify
-   * the contents of the initConfig object such that the
-   * RTC will begin with the correct values
-   */
-  rtcc_time initConfig;
-  //rtclock.setupRTC(&initConfig);
-  RTC::getInstance()->setupRTC(&initConfig);
-
+  
   Serial.begin(9600);
 }
 
 Accel currentReading;
 DateTime currentDateTime;
 uint8_t totalSteps = 0;
-
-void printScreen(){
-  ADXL::getInstance()->readADXL(&currentReading);
-  RTC::getInstance()->readRTC(&currentDateTime);
-  OLED::getInstance()->getLib()->println(sqrt(sq(currentReading.x)+sq(currentReading.y)+sq(currentReading.z)));
-  OLED::getInstance()->getLib()->print(currentDateTime.month);
-  OLED::getInstance()->getLib()->print("/");
-  OLED::getInstance()->getLib()->print(currentDateTime.day);
-  OLED::getInstance()->getLib()->print("/");
-  OLED::getInstance()->getLib()->println(currentDateTime.year);
-  OLED::getInstance()->getLib()->println("<3");
-  OLED::getInstance()->getLib()->print(currentDateTime.hour);
-  OLED::getInstance()->getLib()->print(":");
-  OLED::getInstance()->getLib()->print(currentDateTime.minute);
-  OLED::getInstance()->getLib()->print(":");
-  OLED::getInstance()->getLib()->println(currentDateTime.second);
-  OLED::getInstance()->getLib()->println(ADXL::getInstance()->getLib()->isInactivityAc());
-  OLED::getInstance()->getLib()->display();
-  delay(100);
-  OLED::getInstance()->getLib()->clear(PAGE);
-  OLED::getInstance()->getLib()->setCursor(0,0);
-}
+uint16_t* accelFifo = new uint16_t[32];
+uint8_t alarmtype;
 
 void loop() {
-    printScreen();
+  
+    oled->getLib()->display();
+    oled->getLib()->setCursor(0,0);
+
+    //Serial.println(EF_Global);
+    if(EF_Global != 0)
+    {
+      if(EF_Global == EF_ADXL){
+        EF_Global &= ~EF_ADXL;
+
+        uint8_t source = adxl->getLib()->getInterruptSource();
+        
+        if(adxl->getLib()->triggered(source,ADXL345_WATERMARK)){
+            //need to setup Watermark interrupt
+            adxl->readFIFO(accelFifo, 32, &currentReading);
+            oled->wakeup();
+            oled->getLib()->println("FIFO");
+            oled->getLib()->display();
+            delay(500);
+            oled->getLib()->clear(PAGE);
+            oled->getLib()->display();
+            oled->getLib()->setCursor(0,0);
+            oled->sleep();
+        }
+       
+        if(adxl->getLib()->triggered(source, ADXL345_DOUBLE_TAP)){
+          //display time, day and step count
+            currentDateTime = rtc->getTime();
+            oled->wakeup();
+            oled->getLib()->println("AYE");
+            oled->getLib()->println("HOLMES");
+            oled->getLib()->display();
+            RTC::getInstance()->setTimer(5,0);
+        }
+      }
+
+      if(EF_Global == EF_RTC){
+          EF_Global &= ~EF_RTC;
+          if(rtc->getLib()->isAlarm(0)){
+            rtc->getLib()->clearAlarm(0);
+            oled->getLib()->clear(PAGE);
+            oled->getLib()->display();
+            oled->getLib()->setCursor(0,0);
+            oled->sleep();
+          }
+          else if(rtc->getLib()->isAlarm(1)){
+            rtc->getLib()->clearAlarm(1);
+            //should be the 15 minute alarm to save to eeprom
+          }
+        }
+    //put processor to sleep
+    //sleep();  //need to pull MFP up to vcc using 10k resistor to properly wake up
+    }
+     //Serial.println("----------------------");
+    //adxl->getLib()->printAllRegister();
 }

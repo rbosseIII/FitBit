@@ -17,6 +17,15 @@ void OLED::setUpOLED(){
     oledlib->setFontType(1);
     oledlib->clear(PAGE);
     oledlib->setCursor(0,0);
+    sleep();  //need to put the screen to sleep
+}
+
+void OLED::sleep(){
+    oledlib->command(DISPLAYOFF);
+}
+
+void OLED::wakeup(){
+    oledlib->command(DISPLAYON);
 }
 
 OLED* OLED::getInstance(){
@@ -30,4 +39,3 @@ OLED* OLED::getInstance(){
 MicroOLED* OLED::getLib(){
     return oledlib;
 }
-

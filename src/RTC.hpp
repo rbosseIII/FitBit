@@ -1,27 +1,24 @@
 #include <Arduino.h>
 #include <Wire.h>
-#include <RTCC_MCP7940N.h>
+#include <MCP7940.h>
 
 #define CONTROLCODE 0x6F
 
-typedef struct
-{
-  uint16_t month, day, year;
-  uint16_t hour, minute, second;
-} DateTime;
+const uint8_t ALARMALLMASK = 7;
 
 class RTC{
     public:
         static RTC* getInstance();
-        void setupRTC(rtcc_time* rtccTime);
-        RTCC_MCP7940N* rtclib;
-        RTCC_MCP7940N* getLib();
+        void setupRTC();
+        MCP7940_Class* rtclib;
+        MCP7940_Class* getLib();
         uint8_t bcdToDec(uint8_t val);
-        void readRTC(DateTime* dateTime);
+        bool setTimer(uint32_t sec, uint8_t alarm);
+        DateTime* getTime();
+        void printTime();
 
     private:
         RTC();
         static RTC* _pInstance;
-        void setRTCTime(rtcc_time* rtccTime);
-
+        DateTime* now;
 };

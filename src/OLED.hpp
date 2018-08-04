@@ -6,6 +6,8 @@ class OLED{
         void setUpOLED();
         MicroOLED* oledlib;
         MicroOLED* getLib();
+        void sleep();
+        void wakeup();
 
     private:
         OLED();

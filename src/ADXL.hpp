@@ -2,6 +2,7 @@
 #include <SparkFun_ADXL345.h>
 #include <SPI.h>
 #include <Wire.h>
+#include <math.h>
 
 //#defines go here
 typedef struct
@@ -20,6 +21,12 @@ class ADXL{
         int formatZ(uint8_t*);
         ADXL345* adxllib;
         ADXL345* getLib();
+        void setTapDetection();
+        void setInterrupts();
+        void clearInerrupts();
+        void readFIFO(uint16_t * pArray, int size, Accel* accel);
+        void setFifo();
+    
     private:
         ADXL();
         static ADXL* _pInstance;

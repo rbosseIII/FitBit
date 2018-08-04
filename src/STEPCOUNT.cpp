@@ -14,10 +14,15 @@ STEPCOUNT::STEPCOUNT(){
     //does nothing
 }
 
-uint8_t STEPCOUNT::calculateSteps(uint8_t* fifo){
-    for(int i=0; i<32; i++)
+void STEPCOUNT::calculateSteps(uint8_t* fifo, uint8_t* steps){
+    int counter = 0;
+    for(int i=0; i<FIFOLENGTH; i++)
     {
-        
+
+        counter ++;
     }
-    return 0;
+}
+
+void STEPCOUNT::updateSteps(uint8_t* pdata){
+    
 }
