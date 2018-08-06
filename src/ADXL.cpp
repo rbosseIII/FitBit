@@ -20,7 +20,7 @@ ADXL::ADXL(){
     //does nothing
 }
 
-void ADXL::readFIFO(uint16_t * pArray, int size, Accel* accel){
+void ADXL::readFIFO(int16_t * pArray, int size, Accel* accel){
     for(int i= 0; i<size; i++){
         readADXL(accel);
         int mag = sqrt(sq(accel->x)+sq(accel->y)+sq(accel->z));
@@ -32,7 +32,7 @@ void ADXL::setupADXL345(){
     adxllib = new ADXL345;
     adxllib->powerOn();
     adxllib->setRangeSetting(4);
-    adxllib->setRate(12.5); //12.5Hz
+    adxllib->setRate(12.5); //12.5Hz    //or 6.25Hz
     clearInerrupts();
     adxllib->setActivityXYZ(1,1,1);
     adxllib->setActivityThreshold(75);
@@ -52,7 +52,7 @@ void ADXL::setupADXL345(){
 void ADXL::setFifo(){
     Wire.beginTransmission(ADXLADDRESS);
     Wire.write(0x38);
-    Wire.write(0x7E);
+    Wire.write(0x7F);
     Wire.endTransmission();
 }
 

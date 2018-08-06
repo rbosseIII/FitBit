@@ -6,6 +6,7 @@
 #include <RTC.hpp>
 #include <avr/sleep.h>
 #include <avr/power.h>
+#include <STEPCOUNT.hpp>
 
 #define ADXLINT1 0
 #define ADXLINT2 1
@@ -34,6 +35,7 @@ RTC* rtc = RTC::getInstance();
 EEPROM* eeprom = EEPROM::getInstance();
 ADXL* adxl = ADXL::getInstance();
 OLED* oled = OLED::getInstance();
+STEPCOUNT* stepcnt = STEPCOUNT::getInstance();
 
 
 void delayLoop()
@@ -147,50 +149,45 @@ void setup() {
    */
   oled->setUpOLED();
 
-  
-  Serial.begin(9600);
+  //rtc->setTimer(900,1);
 }
 
 Accel currentReading;
 DateTime currentDateTime;
-uint8_t totalSteps = 0;
-uint16_t* accelFifo = new uint16_t[32];
+uint16_t totalSteps = 0;
+int16_t* accelFifo = new int16_t[32];
 uint8_t alarmtype;
 
 void loop() {
-  
-    oled->getLib()->display();
-    oled->getLib()->setCursor(0,0);
-
-    //Serial.println(EF_Global);
+    Serial.println(EF_Global);
     if(EF_Global != 0)
     {
       if(EF_Global == EF_ADXL){
         EF_Global &= ~EF_ADXL;
 
-        uint8_t source = adxl->getLib()->getInterruptSource();
+        uint8_t source = adxl->getLib()->getInterruptSource() & ~(0xDD);  //0xDD flag mask to prevent wrong source reads
         
         if(adxl->getLib()->triggered(source,ADXL345_WATERMARK)){
             //need to setup Watermark interrupt
-            adxl->readFIFO(accelFifo, 32, &currentReading);
-            oled->wakeup();
-            oled->getLib()->println("FIFO");
-            oled->getLib()->display();
-            delay(500);
-            oled->getLib()->clear(PAGE);
-            oled->getLib()->display();
-            oled->getLib()->setCursor(0,0);
-            oled->sleep();
+            adxl->readFIFO(accelFifo, 32, &currentReading); 
+            stepcnt->calculateSteps(accelFifo, &totalSteps);
         }
        
         if(adxl->getLib()->triggered(source, ADXL345_DOUBLE_TAP)){
           //display time, day and step count
-            currentDateTime = rtc->getTime();
+            currentDateTime = *(rtc->getTime());
             oled->wakeup();
-            oled->getLib()->println("AYE");
-            oled->getLib()->println("HOLMES");
+            oled->getLib()->clear(PAGE);
+            oled->getLib()->setCursor(0,0);
+            oled->getLib()->print(currentDateTime.month());
+            oled->getLib()->print("/");
+            oled->getLib()->println(currentDateTime.day());
+            oled->getLib()->print(currentDateTime.hour());
+            oled->getLib()->print(":");
+            oled->getLib()->println(currentDateTime.minute());
+            oled->getLib()->print(totalSteps);
             oled->getLib()->display();
-            RTC::getInstance()->setTimer(5,0);
+            rtc->setTimer(5,0);
         }
       }
 
@@ -205,12 +202,13 @@ void loop() {
           }
           else if(rtc->getLib()->isAlarm(1)){
             rtc->getLib()->clearAlarm(1);
-            //should be the 15 minute alarm to save to eeprom
+            rtc->setTimer(900,1);
+            Serial.println("ALARM2 POPPED");
+            //save to EEPROM
           }
         }
     //put processor to sleep
     //sleep();  //need to pull MFP up to vcc using 10k resistor to properly wake up
     }
-     //Serial.println("----------------------");
-    //adxl->getLib()->printAllRegister();
+
 }

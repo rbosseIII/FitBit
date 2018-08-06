@@ -7,7 +7,7 @@
 //#defines go here
 typedef struct
 {
-  float x, y, z;
+  int x, y, z;
 } Accel;
 
 class ADXL{
@@ -24,7 +24,7 @@ class ADXL{
         void setTapDetection();
         void setInterrupts();
         void clearInerrupts();
-        void readFIFO(uint16_t * pArray, int size, Accel* accel);
+        void readFIFO(int16_t * pArray, int size, Accel* accel);
         void setFifo();
     
     private:
